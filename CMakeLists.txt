@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 if(NOT DEFINED CMAKE_CXX_FLAGS)
-	set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native -fno-rtti" CACHE STRING "Flags used by the compiler during all build types.")
+	set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native -fno-rtti -fopenmp" CACHE STRING "Flags used by the compiler during all build types.")
 endif()
 # build type defaults to release
 if(NOT DEFINED CMAKE_BUILD_TYPE)
