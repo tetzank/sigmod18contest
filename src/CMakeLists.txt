@@ -1,1 +1,1 @@
-add_executable(sig18 main.cpp Relation.cpp)
+add_executable(sig18 main.cpp Relation.cpp Query.cpp)
