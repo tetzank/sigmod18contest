@@ -1,5 +1,7 @@
 #include "Query.h"
 
+#include <algorithm>
+
 #include "RelationalOperators.h"
 
 

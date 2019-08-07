@@ -10,6 +10,13 @@
 #include "RelationalOperators.h"
 
 
+#ifdef MEASURE_TIME
+double prepare_time=0.0;
+double compilation_time=0.0;
+double exec_time=0.0;
+#endif
+
+
 static std::vector<Relation> parseInit(const char *fname){
 	std::vector<Relation> relations;
 
