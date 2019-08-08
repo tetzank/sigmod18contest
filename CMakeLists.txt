@@ -18,7 +18,46 @@ include_directories("${CMAKE_SOURCE_DIR}/include/")
 #FIXME: add COAT as submodule and search for it
 include_directories("${CMAKE_SOURCE_DIR}/../coat_git/include/")
 
+# find asmjit
+find_path(ASMJIT_INCLUDE_DIR
+	asmjit/asmjit.h
+	HINTS external/asmjit ENV ASMJIT_ROOT
+	PATH_SUFFIXES src
+)
+find_library(ASMJIT_LIBRARIES
+	asmjit
+	HINTS external/asmjit ENV ASMJIT_ROOT
+	PATH_SUFFIXES build
+)
+include_directories(${ASMJIT_INCLUDE_DIR})
+
+# find llvm, quick&dirty
+find_path(LLVM_INCLUDE_DIR
+	llvm/IR/IRBuilder.h
+	HINTS external/llvm/llvm/install ENV LLVM_ROOT
+	PATH_SUFFIXES include
+)
+find_library(LLVM_LIBRARIES
+	LLVM-7.1
+	HINTS external/llvm/llvm/install ENV LLVM_ROOT
+	PATH_SUFFIXES lib build/lib
+)
+include_directories(${LLVM_INCLUDE_DIR})
+
+
+option(ENABLE_ASMJIT "enable AsmJit backend" ON)
+option(ENABLE_LLVMJIT "enable LLVM JIT backend" ON)
+
+
 add_executable(sig18 src/main.cpp src/Relation.cpp src/Query.cpp)
+if(ENABLE_ASMJIT)
+	target_compile_definitions(sig18 PRIVATE "ENABLE_ASMJIT")
+	target_link_libraries(sig18 ${ASMJIT_LIBRARIES})
+endif()
+if(ENABLE_LLVMJIT)
+	target_compile_definitions(sig18 PRIVATE "ENABLE_LLVMJIT")
+	target_link_libraries(sig18 ${LLVM_LIBRARIES})
+endif()
 
 
 option(DISABLE_OPENMP "disable parallelization" OFF)
