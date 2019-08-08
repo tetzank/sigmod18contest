@@ -43,6 +43,56 @@ inline uint64_t loadValue(const column_t &col, uint64_t idx){
 }
 
 
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+// loadValue with COAT
+template<class Fn, class CC>
+coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,uint64_t> &idx){
+	coat::Value<CC, uint64_t> loaded(fn, "loaded");
+	switch(col.index()){
+		case 0: {
+			uint64_t *c = std::get<uint64_t*>(col);
+			coat::Ptr<CC,coat::Value<CC,uint64_t>> vr_col(fn, "col");
+			vr_col = c;
+			loaded = vr_col[idx];
+			break;
+		}
+		case 1: {
+			uint32_t *c = std::get<uint32_t*>(col);
+			coat::Ptr<CC,coat::Value<CC,uint32_t>> vr_col(fn, "col");
+			vr_col = c;
+			loaded.widen(vr_col[idx]);
+			break;
+		}
+		case 2: {
+			uint16_t *c = std::get<uint16_t*>(col);
+			coat::Ptr<CC,coat::Value<CC,uint16_t>> vr_col(fn, "col");
+			vr_col = c;
+			loaded.widen(vr_col[idx]);
+			break;
+		}
+
+		default:
+			fprintf(stderr, "unknown type in column_t: %lu\n", col.index());
+			abort();
+	}
+	
+	return loaded;
+}
+#endif
+
+
+// function signature of generated function
+// parameters: lower, upper (morsel), ptr to buffer of projection entries
+// returns number of results
+//using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
+using codegen_func_type = void (*)();
+#ifdef ENABLE_ASMJIT
+using Fn_asmjit = coat::Function<coat::runtimeasmjit,codegen_func_type>;
+#endif
+#ifdef ENABLE_LLVMJIT
+using Fn_llvmjit = coat::Function<coat::runtimellvmjit,codegen_func_type>;
+#endif
+
 
 class Operator{
 protected:
@@ -60,12 +110,31 @@ public:
 
 	// tuple-by-tuple execution
 	virtual void execute(Context*)=0;
+
+	// code generation with coat, for each backend, chosen at runtime
+#ifdef ENABLE_ASMJIT
+	virtual void codegen(Fn_asmjit &fn, coat::Value<asmjit::x86::Compiler,uint64_t> &rowid)=0;
+#endif
+#ifdef ENABLE_LLVMJIT
+	virtual void codegen(Fn_llvmjit &fn, coat::Value<llvm::IRBuilder<>,uint64_t> &rowid)=0;
+#endif
 };
 
 
 class ScanOperator final : public Operator{
 private:
 	uint64_t tuples;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn, class CC>
+	void codegen_impl(Fn &fn, coat::Value<CC,uint64_t> &rowid){
+		coat::Value vr_tuples(fn, tuples, "tuples");
+		coat::do_while(fn, [&]{
+			next->codegen(fn, rowid);
+			++rowid;
+		}, rowid < vr_tuples);
+	}
+#endif
 
 public:
 	ScanOperator(const Relation &relation) : tuples(relation.getNumberOfTuples()) {}
@@ -77,6 +146,13 @@ public:
 			next->execute(ctx);
 		}
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, coat::Value<asmjit::x86::Compiler,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, coat::Value<llvm::IRBuilder<>,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+#endif
 
 	uint64_t getTuples() const {
 		return tuples;
@@ -90,6 +166,37 @@ private:
 	uint64_t constant;
 	unsigned relid;
 	Filter::Comparison comparison;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn, class CC>
+	void codegen_impl(Fn &fn, coat::Value<CC,uint64_t> &rowid){
+		//FIXME: reading from column wrong
+		//coat::Ptr<CC,coat::Value<CC,uint64_t>> col(fn, "col");
+		//col = column;
+		//auto val = col[rowid];
+		auto val = loadValue(fn, column, rowid);
+		switch(comparison){
+			case Filter::Comparison::Less: {
+				coat::if_then(fn, val < constant, [&]{
+					next->codegen(fn, rowid);
+				});
+				break;
+			}
+			case Filter::Comparison::Greater: {
+				coat::if_then(fn, val > constant, [&]{
+					next->codegen(fn, rowid);
+				});
+				break;
+			}
+			case Filter::Comparison::Equal: {
+				coat::if_then(fn, val == constant, [&]{
+					next->codegen(fn, rowid);
+				});
+				break;
+			}
+		}
+	}
+#endif
 
 public:
 	FilterOperator(const Relation &relation, const Filter &filter)
@@ -122,6 +229,13 @@ public:
 			}
 		}
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, coat::Value<asmjit::x86::Compiler,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, coat::Value<llvm::IRBuilder<>,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+#endif
 };
 
 
@@ -133,6 +247,13 @@ private:
 	const column_t &rightColumn;
 	unsigned leftBinding;
 	unsigned rightBinding;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn, class CC>
+	void codegen_impl(Fn &fn, coat::Value<CC,uint64_t> &rowid){
+		//TODO
+	}
+#endif
 
 public:
 	SelfJoinOperator(

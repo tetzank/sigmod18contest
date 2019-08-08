@@ -5,6 +5,11 @@
 #include <omp.h>
 #endif
 
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+#include "coat/Function.h"
+#include "coat/ControlFlow.h"
+#endif
+
 #include "Relation.h"
 #include "Query.h"
 #include "RelationalOperators.h"
