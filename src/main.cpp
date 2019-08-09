@@ -225,6 +225,37 @@ void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj,
 
 	printResult(amount, res, q.selections.size(), fd_out);
 }
+void codegenLLVMjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
+	coat::runtimellvmjit *llvmrt = (coat::runtimellvmjit*) data;
+	coat::Function<coat::runtimellvmjit,codegen_func_type> fn(*llvmrt);
+	{
+		CodegenContext ctx(fn, q.relationIds.size(), q.selections.size());
+		scan->codegen(fn, ctx);
+		proj->codegen_save(fn, ctx);
+		coat::ret(fn, ctx.amount);
+	}
+	llvmrt->print("last.ll");
+	if(!llvmrt->verifyFunctions()){
+		puts("verification failed. aborting.");
+		exit(EXIT_FAILURE); //FIXME: better error handling
+	}
+	if(llvmrt->getOptLevel() > 0){
+		llvmrt->optimize();
+		llvmrt->print("last_opt.ll");
+		if(!llvmrt->verifyFunctions()){
+			puts("verification after optimization failed. aborting.");
+			exit(EXIT_FAILURE); //FIXME: better error handling
+		}
+	}
+	// finalize function
+	codegen_func_type fnptr = fn.finalize(*llvmrt);
+
+	uint64_t res[q.selections.size()];
+	// execute generated function
+	uint64_t amount = fnptr(res);
+
+	printResult(amount, res, q.selections.size(), fd_out);
+}
 
 
 int main(int argc, char *argv[]){
