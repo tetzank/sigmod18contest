@@ -151,6 +151,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("ScanOperator");
+#endif
 		coat::Value vr_tuples(fn, tuples, "tuples");
 		ctx.rowids[0] = 0;
 		coat::do_while(fn, [&]{
@@ -194,6 +197,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("FilterOperator");
+#endif
 		// read from column, depends on column type
 		auto val = loadValue(fn, column, ctx.rowids[relid]);
 		switch(comparison){
@@ -272,6 +278,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("SelfJoinOperator");
+#endif
 		auto lval = loadValue(fn, leftColumn, ctx.rowids[leftBinding]);
 		auto rval = loadValue(fn, rightColumn, ctx.rowids[rightBinding]);
 		if_then(fn, lval == rval, [&]{
@@ -321,6 +330,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		printf("JoinOperator: probe=%u; build=%u\n", probeRelation, buildRelation);
+#endif
 		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
 		coat::Struct<typename Fn::F,HT_t> ht(fn, "hashtable");
 		//FIXME: const structures currently not supported
@@ -380,6 +392,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("JoinUniqueOperator");
+#endif
 		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
 		coat::Struct<typename Fn::F,HTu_t> ht(fn, "hashtable_unique");
 		//FIXME: const structures currently not supported
@@ -435,6 +450,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("SemiJoinOperator");
+#endif
 		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
 		coat::Struct<typename Fn::F,BitsetTable> bt(fn, "bitsettable");
 		//FIXME: const structures currently not supported
@@ -485,6 +503,9 @@ private:
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("ProjectionOperator");
+#endif
 		for(size_t i=0; i<size; ++i){
 			auto [column, relid] = projections[i];
 			auto val = loadValue(fn, *column, ctx.rowids[relid]);
@@ -495,6 +516,9 @@ private:
 
 	template<class Fn>
 	void codegen_save_impl(Fn &fn, CodegenContext<Fn> &ctx){
+#ifndef QUIET
+		puts("ProjectionOperator save");
+#endif
 		for(size_t i=0; i<size; ++i){
 			auto &projaddr = std::get<0>(ctx.arguments);
 			projaddr[i] = ctx.results[i];
