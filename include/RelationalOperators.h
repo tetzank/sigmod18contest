@@ -18,6 +18,21 @@ operators:
 #include "Relation.h"
 #include "Query.h"
 
+#include "coat/ControlFlow.h"
+
+
+// function signature of generated function
+// parameters: lower, upper (morsel), ptr to buffer of projection entries
+// returns number of results
+//using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
+using codegen_func_type = uint64_t (*)(uint64_t*);
+#ifdef ENABLE_ASMJIT
+using Fn_asmjit = coat::Function<coat::runtimeasmjit,codegen_func_type>;
+#endif
+#ifdef ENABLE_LLVMJIT
+using Fn_llvmjit = coat::Function<coat::runtimellvmjit,codegen_func_type>;
+#endif
+
 
 struct Context{
 	// current rowids in order as relations are defined in query
@@ -44,6 +59,27 @@ inline uint64_t loadValue(const column_t &col, uint64_t idx){
 
 
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+
+template<class Fn>
+struct CodegenContext {
+	using CC = typename Fn::F;
+
+	std::vector<coat::Value<CC,uint64_t>> rowids;
+	std::vector<coat::Value<CC,uint64_t>> results;
+	coat::Value<CC,uint64_t> amount;
+	std::tuple<coat::Ptr<CC,coat::Value<CC,uint64_t>>> arguments;
+
+	CodegenContext(Fn &fn, size_t numberOfRelations, size_t numberOfProjections)
+		: rowids(numberOfRelations, coat::Value<CC,uint64_t>(fn))
+		, results(numberOfProjections, coat::Value<CC,uint64_t>(fn, 0UL))
+		, amount(fn, 0UL, "amount")
+		, arguments(fn.getArguments("proj_addr"))
+	{
+		
+	}
+};
+
+
 // loadValue with COAT
 template<class Fn, class CC>
 coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,uint64_t> &idx){
@@ -81,19 +117,6 @@ coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,u
 #endif
 
 
-// function signature of generated function
-// parameters: lower, upper (morsel), ptr to buffer of projection entries
-// returns number of results
-//using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
-using codegen_func_type = void (*)();
-#ifdef ENABLE_ASMJIT
-using Fn_asmjit = coat::Function<coat::runtimeasmjit,codegen_func_type>;
-#endif
-#ifdef ENABLE_LLVMJIT
-using Fn_llvmjit = coat::Function<coat::runtimellvmjit,codegen_func_type>;
-#endif
-
-
 class Operator{
 protected:
 	Operator *next=nullptr;
@@ -113,10 +136,10 @@ public:
 
 	// code generation with coat, for each backend, chosen at runtime
 #ifdef ENABLE_ASMJIT
-	virtual void codegen(Fn_asmjit &fn, coat::Value<asmjit::x86::Compiler,uint64_t> &rowid)=0;
+	virtual void codegen(Fn_asmjit&, CodegenContext<Fn_asmjit>&)=0;
 #endif
 #ifdef ENABLE_LLVMJIT
-	virtual void codegen(Fn_llvmjit &fn, coat::Value<llvm::IRBuilder<>,uint64_t> &rowid)=0;
+	virtual void codegen(Fn_llvmjit&, CodegenContext<Fn_llvmjit>&)=0;
 #endif
 };
 
@@ -126,20 +149,21 @@ private:
 	uint64_t tuples;
 
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
-	template<class Fn, class CC>
-	void codegen_impl(Fn &fn, coat::Value<CC,uint64_t> &rowid){
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
 		coat::Value vr_tuples(fn, tuples, "tuples");
+		ctx.rowids[0] = 0;
 		coat::do_while(fn, [&]{
-			next->codegen(fn, rowid);
-			++rowid;
-		}, rowid < vr_tuples);
+			next->codegen(fn, ctx);
+			++ctx.rowids[0];
+		}, ctx.rowids[0] < vr_tuples);
 	}
 #endif
 
 public:
 	ScanOperator(const Relation &relation) : tuples(relation.getNumberOfTuples()) {}
 
-	void execute(Context *ctx) override{
+	void execute(Context *ctx) override {
 		for(uint64_t idx=0; idx<tuples; ++idx){
 			// pass tuple by tuple (very bad performance without codegen)
 			ctx->rowids[0] = idx;
@@ -148,10 +172,10 @@ public:
 	}
 
 #ifdef ENABLE_ASMJIT
-	void codegen(Fn_asmjit &fn, coat::Value<asmjit::x86::Compiler,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
 #endif
 #ifdef ENABLE_LLVMJIT
-	void codegen(Fn_llvmjit &fn, coat::Value<llvm::IRBuilder<>,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
 #endif
 
 	uint64_t getTuples() const {
@@ -168,29 +192,26 @@ private:
 	Filter::Comparison comparison;
 
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
-	template<class Fn, class CC>
-	void codegen_impl(Fn &fn, coat::Value<CC,uint64_t> &rowid){
-		//FIXME: reading from column wrong
-		//coat::Ptr<CC,coat::Value<CC,uint64_t>> col(fn, "col");
-		//col = column;
-		//auto val = col[rowid];
-		auto val = loadValue(fn, column, rowid);
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		// read from column, depends on column type
+		auto val = loadValue(fn, column, ctx.rowids[relid]);
 		switch(comparison){
 			case Filter::Comparison::Less: {
 				coat::if_then(fn, val < constant, [&]{
-					next->codegen(fn, rowid);
+					next->codegen(fn, ctx);
 				});
 				break;
 			}
 			case Filter::Comparison::Greater: {
 				coat::if_then(fn, val > constant, [&]{
-					next->codegen(fn, rowid);
+					next->codegen(fn, ctx);
 				});
 				break;
 			}
 			case Filter::Comparison::Equal: {
 				coat::if_then(fn, val == constant, [&]{
-					next->codegen(fn, rowid);
+					next->codegen(fn, ctx);
 				});
 				break;
 			}
@@ -231,10 +252,10 @@ public:
 	}
 
 #ifdef ENABLE_ASMJIT
-	void codegen(Fn_asmjit &fn, coat::Value<asmjit::x86::Compiler,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
 #endif
 #ifdef ENABLE_LLVMJIT
-	void codegen(Fn_llvmjit &fn, coat::Value<llvm::IRBuilder<>,uint64_t> &rowid) override { codegen_impl(fn, rowid); }
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
 #endif
 };
 
@@ -249,9 +270,13 @@ private:
 	unsigned rightBinding;
 
 #if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
-	template<class Fn, class CC>
-	void codegen_impl(Fn &fn, coat::Value<CC,uint64_t> &rowid){
-		//TODO
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		auto lval = loadValue(fn, leftColumn, ctx.rowids[leftBinding]);
+		auto rval = loadValue(fn, rightColumn, ctx.rowids[rightBinding]);
+		if_then(fn, lval == rval, [&]{
+			next->codegen(fn, ctx);
+		});
 	}
 #endif
 
@@ -275,6 +300,13 @@ public:
 			next->execute(ctx);
 		}
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
 };
 
 
@@ -285,6 +317,22 @@ private:
 	const HT_t *hashtable;
 	unsigned probeRelation;
 	unsigned buildRelation;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
+		coat::Struct<typename Fn::F,HT_t> ht(fn, "hashtable");
+		//FIXME: const structures currently not supported
+		ht = const_cast<HT_t*>(hashtable); // load address of hash table as immediate/constant in the generated code
+		// iterate over all join partners
+		ht.iterate(val, [&](auto &ele){
+			// set rowid of joined relation
+			ctx.rowids[buildRelation] = ele;
+			next->codegen(fn, ctx);
+		});
+	}
+#endif
 
 public:
 	JoinOperator(
@@ -311,6 +359,13 @@ public:
 			}
 		}
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
 };
 
 
@@ -321,6 +376,22 @@ private:
 	const HTu_t *hashtable;
 	unsigned probeRelation;
 	unsigned buildRelation;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
+		coat::Struct<typename Fn::F,HTu_t> ht(fn, "hashtable_unique");
+		//FIXME: const structures currently not supported
+		ht = const_cast<HTu_t*>(hashtable); // load address of hash table as immediate/constant in the generated code
+		// lookup join partner, if there is one
+		ht.lookup(val, [&](auto &ele){
+			// set rowid of joined relation
+			ctx.rowids[buildRelation] = ele;
+			next->codegen(fn, ctx);
+		});
+	}
+#endif
 
 public:
 	JoinUniqueOperator(
@@ -344,6 +415,13 @@ public:
 			next->execute(ctx);
 		}
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
 };
 
 
@@ -353,6 +431,19 @@ private:
 	const column_t &probeColumn;
 	const BitsetTable *hashtable;
 	unsigned probeRelation;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
+		coat::Struct<typename Fn::F,BitsetTable> bt(fn, "bitsettable");
+		//FIXME: const structures currently not supported
+		bt = const_cast<BitsetTable*>(hashtable); // load address of hash table as immediate/constant in the generated code
+		bt.check(val, [&]{
+			next->codegen(fn, ctx);
+		});
+	}
+#endif
 
 public:
 	SemiJoinOperator(
@@ -371,6 +462,13 @@ public:
 			next->execute(ctx);
 		}
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
+#endif
 };
 
 
@@ -383,6 +481,26 @@ private:
 	// number of tuples reached projection, to distinguish sum==0 and NULL because of no tuples
 	uint64_t amount = 0;
 	uint64_t size;
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+	template<class Fn>
+	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		for(size_t i=0; i<size; ++i){
+			auto [column, relid] = projections[i];
+			auto val = loadValue(fn, *column, ctx.rowids[relid]);
+			ctx.results[i] += val;
+		}
+		++ctx.amount;
+	}
+
+	template<class Fn>
+	void codegen_save_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		for(size_t i=0; i<size; ++i){
+			auto &projaddr = std::get<0>(ctx.arguments);
+			projaddr[i] = ctx.results[i];
+		}
+	}
+#endif
 
 public:
 	ProjectionOperator(
@@ -408,6 +526,15 @@ public:
 		}
 		++amount;
 	}
+
+#ifdef ENABLE_ASMJIT
+	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
+	void codegen_save(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx){ codegen_save_impl(fn, ctx); }
+#endif
+#ifdef ENABLE_LLVMJIT
+	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
+	void codegen_save(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx){ codegen_save_impl(fn, ctx); }
+#endif
 
 	const std::vector<uint64_t> &getResults() const {
 		return results;

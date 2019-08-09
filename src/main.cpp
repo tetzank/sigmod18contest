@@ -208,6 +208,24 @@ void tupleByTuple(const Query &q, ScanOperator *scan, ProjectionOperator *proj, 
 	printResult(proj, fd_out);
 }
 
+void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
+	coat::Function<coat::runtimeasmjit,codegen_func_type> fn((coat::runtimeasmjit*)data);
+	{
+		CodegenContext ctx(fn, q.relationIds.size(), q.selections.size());
+		scan->codegen(fn, ctx);
+		proj->codegen_save(fn, ctx);
+		coat::ret(fn, ctx.amount);
+	}
+	// finalize function
+	codegen_func_type fnptr = fn.finalize((coat::runtimeasmjit*)data);
+
+	uint64_t res[q.selections.size()];
+	// execute generated function
+	uint64_t amount = fnptr(res);
+
+	printResult(amount, res, q.selections.size(), fd_out);
+}
+
 
 int main(int argc, char *argv[]){
 	if(argc < 4){
@@ -228,20 +246,28 @@ int main(int argc, char *argv[]){
 
 	auto t_init = std::chrono::high_resolution_clock::now();
 
-#if 0
 	// init JIT engines
-	runtimeAsmjit asmrt;
-	LLVMJIT::initTarget();
-	LLVMJIT llvmjit;
+#ifdef ENABLE_ASMJIT
+	coat::runtimeasmjit asmrt;
 #endif
+#ifdef ENABLE_LLVMJIT
+	coat::runtimellvmjit::initTarget();
+	coat::runtimellvmjit llvmjit;
+#endif
+
 	char *p = &argv[1][1];
 	while(*p){
 		if(*p == 't'){
+			puts("tuple by tuple");
 			parseWork(argv[3], relations, tupleByTuple, nullptr);
-#if 0
+#if ENABLE_ASMJIT
 		}else if(*p == 'a'){
+			puts("asmjit");
 			parseWork(argv[3], relations, codegenAsmjit, &asmrt);
+#endif
+#ifdef ENABLE_LLVMJIT
 		}else if(*p == 'l'){
+			puts("LLVM");
 			switch(p[1]){
 				case '0': llvmjit.setOptLevel(0); break;
 				case '1': llvmjit.setOptLevel(1); break;
