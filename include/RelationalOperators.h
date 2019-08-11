@@ -24,8 +24,7 @@ operators:
 // function signature of generated function
 // parameters: lower, upper (morsel), ptr to buffer of projection entries
 // returns number of results
-//using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
-using codegen_func_type = uint64_t (*)(uint64_t*);
+using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
 #ifdef ENABLE_ASMJIT
 using Fn_asmjit = coat::Function<coat::runtimeasmjit,codegen_func_type>;
 #endif
@@ -64,16 +63,16 @@ template<class Fn>
 struct CodegenContext {
 	using CC = typename Fn::F;
 
+	std::tuple<coat::Value<CC,uint64_t>,coat::Value<CC,uint64_t>,coat::Ptr<CC,coat::Value<CC,uint64_t>>> arguments;
 	std::vector<coat::Value<CC,uint64_t>> rowids;
 	std::vector<coat::Value<CC,uint64_t>> results;
 	coat::Value<CC,uint64_t> amount;
-	std::tuple<coat::Ptr<CC,coat::Value<CC,uint64_t>>> arguments;
 
 	CodegenContext(Fn &fn, size_t numberOfRelations, size_t numberOfProjections)
-		: rowids(numberOfRelations, coat::Value<CC,uint64_t>(fn))
+		: arguments(fn.getArguments("lower", "upper", "proj_addr"))
+		, rowids(numberOfRelations, coat::Value<CC,uint64_t>(fn))
 		, results(numberOfProjections, coat::Value<CC,uint64_t>(fn, 0UL))
 		, amount(fn, 0UL, "amount")
-		, arguments(fn.getArguments("proj_addr"))
 	{
 		
 	}
@@ -154,12 +153,13 @@ private:
 #ifndef QUIET
 		puts("ScanOperator");
 #endif
-		coat::Value vr_tuples(fn, tuples, "tuples");
-		ctx.rowids[0] = 0;
+		// do not make a copy, just take the virtual register from arguments
+		ctx.rowids[0] = std::move(std::get<0>(ctx.arguments));
+		auto &upper = std::get<1>(ctx.arguments);
 		coat::do_while(fn, [&]{
 			next->codegen(fn, ctx);
 			++ctx.rowids[0];
-		}, ctx.rowids[0] < vr_tuples);
+		}, ctx.rowids[0] < upper);
 	}
 #endif
 
@@ -520,7 +520,7 @@ private:
 		puts("ProjectionOperator save");
 #endif
 		for(size_t i=0; i<size; ++i){
-			auto &projaddr = std::get<0>(ctx.arguments);
+			auto &projaddr = std::get<2>(ctx.arguments);
 			projaddr[i] = ctx.results[i];
 		}
 	}

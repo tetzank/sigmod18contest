@@ -208,6 +208,51 @@ void tupleByTuple(const Query &q, ScanOperator *scan, ProjectionOperator *proj, 
 	printResult(proj, fd_out);
 }
 
+#ifdef MORSELS
+// returns amount, writes to res
+uint64_t morsel_execution(codegen_func_type fnptr, uint64_t tuples, uint64_t *res, size_t rsize){
+	uint64_t amount = 0;
+	for(size_t i=0; i<rsize; ++i){
+		res[i] = 0;
+	}
+	const uint64_t morsel_size = 1024;
+	const uint64_t morsel_count = (tuples / morsel_size) +1;
+	#pragma omp parallel
+	{
+		uint64_t privres[rsize];
+		uint64_t privaggr[rsize];
+		for(size_t i=0; i<rsize; ++i){
+			privaggr[i] = 0;
+		}
+		uint64_t privcollectedamount=0;
+		#pragma omp for schedule(dynamic,1)
+		for(uint64_t m=0; m<morsel_count; m++){
+			uint64_t begin = m * morsel_size;
+			uint64_t end = begin + morsel_size;
+			if(end > tuples){
+				// last one, gets the rest, that way we don't have to care about rounding
+				end = tuples;
+			}
+			// execute
+			uint64_t privamount = fnptr(begin, end, privres);
+			for(size_t i=0; i<rsize; ++i){
+				privaggr[i] += privres[i];
+			}
+			privcollectedamount += privamount;
+		}
+
+		#pragma omp critical
+		{
+			for(size_t i=0; i<rsize; ++i){
+				res[i] += privaggr[i];
+			}
+			amount += privcollectedamount;
+		}
+	}
+	return amount;
+}
+#endif
+
 void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
 	coat::Function<coat::runtimeasmjit,codegen_func_type> fn((coat::runtimeasmjit*)data);
 	{
@@ -219,9 +264,15 @@ void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj,
 	// finalize function
 	codegen_func_type fnptr = fn.finalize((coat::runtimeasmjit*)data);
 
-	uint64_t res[q.selections.size()];
+	const size_t rsize = q.selections.size();
+	uint64_t res[rsize];
+	const uint64_t tuples = scan->getTuples();
+#ifdef MORSELS
+	uint64_t amount = morsel_execution(fnptr, tuples, res, rsize);
+#else
 	// execute generated function
-	uint64_t amount = fnptr(res);
+	uint64_t amount = fnptr(0, tuples, res);
+#endif
 
 	printResult(amount, res, q.selections.size(), fd_out);
 }
@@ -250,9 +301,15 @@ void codegenLLVMjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj
 	// finalize function
 	codegen_func_type fnptr = fn.finalize(*llvmrt);
 
-	uint64_t res[q.selections.size()];
+	const size_t rsize = q.selections.size();
+	uint64_t res[rsize];
+	const uint64_t tuples = scan->getTuples();
+#ifdef MORSELS
+	uint64_t amount = morsel_execution(fnptr, tuples, res, rsize);
+#else
 	// execute generated function
-	uint64_t amount = fnptr(res);
+	uint64_t amount = fnptr(0, tuples, res);
+#endif
 
 	printResult(amount, res, q.selections.size(), fd_out);
 }
@@ -289,16 +346,13 @@ int main(int argc, char *argv[]){
 	char *p = &argv[1][1];
 	while(*p){
 		if(*p == 't'){
-			puts("tuple by tuple");
 			parseWork(argv[3], relations, tupleByTuple, nullptr);
 #if ENABLE_ASMJIT
 		}else if(*p == 'a'){
-			puts("asmjit");
 			parseWork(argv[3], relations, codegenAsmjit, &asmrt);
 #endif
 #ifdef ENABLE_LLVMJIT
 		}else if(*p == 'l'){
-			puts("LLVM");
 			switch(p[1]){
 				case '0': llvmjit.setOptLevel(0); break;
 				case '1': llvmjit.setOptLevel(1); break;
