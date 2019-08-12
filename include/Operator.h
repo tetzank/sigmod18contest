@@ -1,0 +1,139 @@
+#ifndef OPERATOR_H_
+#define OPERATOR_H_
+
+#include <vector>
+
+#include "coat/Function.h"
+
+
+/*
+operators:
+ - "Scan": just loop through all rowids of starting relation
+ - Filter: check against literal, eq/gt/lt
+ - Join: check against "hash" table, carry rowid (might be needed in projection)
+         multiple variants depending on joined column
+		  - JoinOperator:       using MultiArrayTable if non-unique
+		  - JoinUniqueOperator: using ArrayTable      if unique
+		  - SemiJoinOperator:   using BitsetTable     if unique     and not used later
+ - "self join": left and right relation are both already joined/scanned, could be the same relation, just filter
+*/
+
+// function signature of generated function
+// parameters: lower, upper (morsel), ptr to buffer of projection entries
+// returns number of results
+using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
+#ifdef ENABLE_ASMJIT
+using Fn_asmjit = coat::Function<coat::runtimeasmjit,codegen_func_type>;
+#endif
+#ifdef ENABLE_LLVMJIT
+using Fn_llvmjit = coat::Function<coat::runtimellvmjit,codegen_func_type>;
+#endif
+
+
+struct Context{
+	// current rowids in order as relations are defined in query
+	std::vector<uint64_t> rowids;
+
+	Context(size_t size){
+		rowids.resize(size);
+	}
+};
+
+
+inline uint64_t loadValue(const column_t &col, uint64_t idx){
+	// load value from column which can have different type sizes
+	switch(col.index()){
+		case 0: return std::get<uint64_t*>(col)[idx];
+		case 1: return std::get<uint32_t*>(col)[idx];
+		case 2: return std::get<uint16_t*>(col)[idx];
+
+		default:
+			fprintf(stderr, "unknown type in column_t: %lu\n", col.index());
+			abort();
+	}
+}
+
+
+#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
+template<class Fn>
+struct CodegenContext {
+	using CC = typename Fn::F;
+
+	std::tuple<coat::Value<CC,uint64_t>,coat::Value<CC,uint64_t>,coat::Ptr<CC,coat::Value<CC,uint64_t>>> arguments;
+	std::vector<coat::Value<CC,uint64_t>> rowids;
+	std::vector<coat::Value<CC,uint64_t>> results;
+	coat::Value<CC,uint64_t> amount;
+
+	CodegenContext(Fn &fn, size_t numberOfRelations, size_t numberOfProjections)
+		: arguments(fn.getArguments("lower", "upper", "proj_addr"))
+		, rowids(numberOfRelations, coat::Value<CC,uint64_t>(fn))
+		, results(numberOfProjections, coat::Value<CC,uint64_t>(fn, 0UL))
+		, amount(fn, 0UL, "amount")
+	{}
+};
+
+
+// loadValue with COAT
+template<class Fn, class CC>
+coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,uint64_t> &idx){
+	coat::Value<CC, uint64_t> loaded(fn, "loaded");
+	switch(col.index()){
+		case 0: {
+			uint64_t *c = std::get<uint64_t*>(col);
+			coat::Ptr<CC,coat::Value<CC,uint64_t>> vr_col(fn, "col");
+			vr_col = c;
+			loaded = vr_col[idx];
+			break;
+		}
+		case 1: {
+			uint32_t *c = std::get<uint32_t*>(col);
+			coat::Ptr<CC,coat::Value<CC,uint32_t>> vr_col(fn, "col");
+			vr_col = c;
+			loaded.widen(vr_col[idx]);
+			break;
+		}
+		case 2: {
+			uint16_t *c = std::get<uint16_t*>(col);
+			coat::Ptr<CC,coat::Value<CC,uint16_t>> vr_col(fn, "col");
+			vr_col = c;
+			loaded.widen(vr_col[idx]);
+			break;
+		}
+
+		default:
+			fprintf(stderr, "unknown type in column_t: %lu\n", col.index());
+			abort();
+	}
+	
+	return loaded;
+}
+#endif
+
+
+class Operator{
+protected:
+	Operator *next=nullptr;
+
+public:
+	Operator(){}
+	virtual ~Operator(){
+		delete next;
+	}
+
+	void setNext(Operator *next){
+		this->next = next;
+	}
+
+	// tuple-by-tuple execution
+	virtual void execute(Context*)=0;
+
+	// code generation with coat, for each backend, chosen at runtime
+#ifdef ENABLE_ASMJIT
+	virtual void codegen(Fn_asmjit&, CodegenContext<Fn_asmjit>&)=0;
+#endif
+#ifdef ENABLE_LLVMJIT
+	virtual void codegen(Fn_llvmjit&, CodegenContext<Fn_llvmjit>&)=0;
+#endif
+};
+
+#endif

@@ -2,7 +2,13 @@
 
 #include <algorithm>
 
-#include "RelationalOperators.h"
+#include "ScanOperator.h"
+#include "FilterOperator.h"
+#include "SelfJoinOperator.h"
+#include "JoinOperator.h"
+#include "JoinUniqueOperator.h"
+#include "SemiJoinOperator.h"
+#include "ProjectionOperator.h"
 
 
 void Query::parse(char *line){

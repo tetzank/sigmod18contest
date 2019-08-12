@@ -12,7 +12,8 @@
 
 #include "Relation.h"
 #include "Query.h"
-#include "RelationalOperators.h"
+#include "ScanOperator.h"
+#include "ProjectionOperator.h"
 
 
 #ifdef MEASURE_TIME
