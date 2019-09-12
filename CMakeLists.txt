@@ -15,8 +15,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories("${CMAKE_SOURCE_DIR}/include/")
 
-#FIXME: add COAT as submodule and search for it
-include_directories("${CMAKE_SOURCE_DIR}/../coat_git/include/")
+# add COAT from submodule
+include_directories("${CMAKE_SOURCE_DIR}/external/coat/include/")
 
 # find asmjit
 find_path(ASMJIT_INCLUDE_DIR
