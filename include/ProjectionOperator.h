@@ -15,12 +15,8 @@ private:
 	uint64_t amount = 0;
 	uint64_t size;
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
-#ifndef QUIET
-		puts("ProjectionOperator");
-#endif
 		for(size_t i=0; i<size; ++i){
 			auto [column, relid] = projections[i];
 			auto val = loadValue(fn, *column, ctx.rowids[relid]);
@@ -31,15 +27,11 @@ private:
 
 	template<class Fn>
 	void codegen_save_impl(Fn &fn, CodegenContext<Fn> &ctx){
-#ifndef QUIET
-		puts("ProjectionOperator save");
-#endif
 		for(size_t i=0; i<size; ++i){
 			auto &projaddr = std::get<2>(ctx.arguments);
 			projaddr[i] = ctx.results[i];
 		}
 	}
-#endif
 
 public:
 	ProjectionOperator(
@@ -66,14 +58,10 @@ public:
 		++amount;
 	}
 
-#ifdef ENABLE_ASMJIT
 	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
 	void codegen_save(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx){ codegen_save_impl(fn, ctx); }
-#endif
-#ifdef ENABLE_LLVMJIT
 	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
 	void codegen_save(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx){ codegen_save_impl(fn, ctx); }
-#endif
 
 	const std::vector<uint64_t> &getResults() const {
 		return results;

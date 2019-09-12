@@ -16,19 +16,14 @@ private:
 	unsigned leftBinding;
 	unsigned rightBinding;
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
-#ifndef QUIET
-		puts("SelfJoinOperator");
-#endif
 		auto lval = loadValue(fn, leftColumn, ctx.rowids[leftBinding]);
 		auto rval = loadValue(fn, rightColumn, ctx.rowids[rightBinding]);
 		if_then(fn, lval == rval, [&]{
 			next->codegen(fn, ctx);
 		});
 	}
-#endif
 
 public:
 	SelfJoinOperator(
@@ -51,12 +46,8 @@ public:
 		}
 	}
 
-#ifdef ENABLE_ASMJIT
 	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
-#endif
-#ifdef ENABLE_LLVMJIT
 	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
-#endif
 };
 
 #endif

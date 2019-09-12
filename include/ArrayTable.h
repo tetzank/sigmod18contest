@@ -49,7 +49,6 @@ public:
 };
 
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 namespace coat {
 
 template<typename T>
@@ -77,7 +76,6 @@ struct StructBase<Struct<CC,ArrayTable<T>>> {
 	}
 };
 
-}
-#endif
+} // namespace coat
 
 #endif

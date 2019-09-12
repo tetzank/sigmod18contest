@@ -10,12 +10,8 @@ class ScanOperator final : public Operator{
 private:
 	uint64_t tuples;
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
-#ifndef QUIET
-		puts("ScanOperator");
-#endif
 		// do not make a copy, just take the virtual register from arguments
 		ctx.rowids[0] = std::move(std::get<0>(ctx.arguments));
 		auto &upper = std::get<1>(ctx.arguments);
@@ -24,7 +20,6 @@ private:
 			++ctx.rowids[0];
 		}, ctx.rowids[0] < upper);
 	}
-#endif
 
 public:
 	ScanOperator(const Relation &relation) : tuples(relation.getNumberOfTuples()) {}
@@ -37,12 +32,8 @@ public:
 		}
 	}
 
-#ifdef ENABLE_ASMJIT
 	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
-#endif
-#ifdef ENABLE_LLVMJIT
 	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
-#endif
 
 	uint64_t getTuples() const {
 		return tuples;

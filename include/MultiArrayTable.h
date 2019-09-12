@@ -53,7 +53,6 @@ public:
 };
 
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 namespace coat {
 
 template<typename T>
@@ -83,10 +82,9 @@ struct StructBase<Struct<CC,MultiArrayTable<T>>> {
 				for_each(self.cc, beg, end, then);
 			});
 		});
-
 	}
 };
-}
-#endif
+
+} // namespace coat
 
 #endif

@@ -22,12 +22,8 @@ operators:
 // parameters: lower, upper (morsel), ptr to buffer of projection entries
 // returns number of results
 using codegen_func_type = uint64_t (*)(uint64_t,uint64_t,uint64_t*);
-#ifdef ENABLE_ASMJIT
 using Fn_asmjit = coat::Function<coat::runtimeasmjit,codegen_func_type>;
-#endif
-#ifdef ENABLE_LLVMJIT
 using Fn_llvmjit = coat::Function<coat::runtimellvmjit,codegen_func_type>;
-#endif
 
 
 struct Context{
@@ -54,7 +50,6 @@ inline uint64_t loadValue(const column_t &col, uint64_t idx){
 }
 
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 template<class Fn>
 struct CodegenContext {
 	using CC = typename Fn::F;
@@ -107,7 +102,6 @@ coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,u
 	
 	return loaded;
 }
-#endif
 
 
 class Operator{
@@ -128,12 +122,8 @@ public:
 	virtual void execute(Context*)=0;
 
 	// code generation with coat, for each backend, chosen at runtime
-#ifdef ENABLE_ASMJIT
 	virtual void codegen(Fn_asmjit&, CodegenContext<Fn_asmjit>&)=0;
-#endif
-#ifdef ENABLE_LLVMJIT
 	virtual void codegen(Fn_llvmjit&, CodegenContext<Fn_llvmjit>&)=0;
-#endif
 };
 
 #endif

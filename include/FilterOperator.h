@@ -13,12 +13,8 @@ private:
 	unsigned relid;
 	Filter::Comparison comparison;
 
-#if defined(ENABLE_ASMJIT) || defined(ENABLE_LLVMJIT)
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
-#ifndef QUIET
-		puts("FilterOperator");
-#endif
 		// read from column, depends on column type
 		auto val = loadValue(fn, column, ctx.rowids[relid]);
 		switch(comparison){
@@ -42,7 +38,6 @@ private:
 			}
 		}
 	}
-#endif
 
 public:
 	FilterOperator(const Relation &relation, const Filter &filter)
@@ -76,12 +71,8 @@ public:
 		}
 	}
 
-#ifdef ENABLE_ASMJIT
 	void codegen(Fn_asmjit &fn, CodegenContext<Fn_asmjit> &ctx) override { codegen_impl(fn, ctx); }
-#endif
-#ifdef ENABLE_LLVMJIT
 	void codegen(Fn_llvmjit &fn, CodegenContext<Fn_llvmjit> &ctx) override { codegen_impl(fn, ctx); }
-#endif
 };
 
 #endif
