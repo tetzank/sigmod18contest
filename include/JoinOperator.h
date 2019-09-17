@@ -15,10 +15,10 @@ private:
 
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		// fetch value from probed column
 		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
-		coat::Struct<typename Fn::F,HT_t> ht(fn, "hashtable");
-		//FIXME: const structures currently not supported
-		ht = const_cast<HT_t*>(hashtable); // load address of hash table as immediate/constant in the generated code
+		// embed pointer to hashtable in the generated code
+		auto ht = fn.embedValue(hashtable, "hashtable");
 		// iterate over all join partners
 		ht.iterate(val, [&](auto &ele){
 			// set rowid of joined relation

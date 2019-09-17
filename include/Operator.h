@@ -74,23 +74,20 @@ coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,u
 	coat::Value<CC, uint64_t> loaded(fn, "loaded");
 	switch(col.index()){
 		case 0: {
-			uint64_t *c = std::get<uint64_t*>(col);
-			coat::Ptr<CC,coat::Value<CC,uint64_t>> vr_col(fn, "col");
-			vr_col = c;
+			auto vr_col = fn.embedValue(std::get<uint64_t*>(col), "col");
+			// fetch 64 bit value from column
 			loaded = vr_col[idx];
 			break;
 		}
 		case 1: {
-			uint32_t *c = std::get<uint32_t*>(col);
-			coat::Ptr<CC,coat::Value<CC,uint32_t>> vr_col(fn, "col");
-			vr_col = c;
+			auto vr_col = fn.embedValue(std::get<uint32_t*>(col), "col");
+			// fetch 32 bit value from column and extend to 64 bit
 			loaded.widen(vr_col[idx]);
 			break;
 		}
 		case 2: {
-			uint16_t *c = std::get<uint16_t*>(col);
-			coat::Ptr<CC,coat::Value<CC,uint16_t>> vr_col(fn, "col");
-			vr_col = c;
+			auto vr_col = fn.embedValue(std::get<uint16_t*>(col), "col");
+			// fetch 16 bit value from column and extend to 64 bit
 			loaded.widen(vr_col[idx]);
 			break;
 		}
@@ -99,7 +96,6 @@ coat::Value<CC,uint64_t> loadValue(Fn &fn, const column_t &col, coat::Value<CC,u
 			fprintf(stderr, "unknown type in column_t: %lu\n", col.index());
 			abort();
 	}
-	
 	return loaded;
 }
 
