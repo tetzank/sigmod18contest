@@ -17,18 +17,25 @@ private:
 
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		// iterate over all projected columns
 		for(size_t i=0; i<size; ++i){
 			auto [column, relid] = projections[i];
+			// fetch value from projected column
 			auto val = loadValue(fn, *column, ctx.rowids[relid]);
+			// add value to implicit sum on the projected column
 			ctx.results[i] += val;
 		}
+		// count number of elements in sum
 		++ctx.amount;
 	}
 
 	template<class Fn>
 	void codegen_save_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		// get memory location to store result tuple to from an argument
+		auto &projaddr = std::get<2>(ctx.arguments);
+		// iterate over all projected columns
 		for(size_t i=0; i<size; ++i){
-			auto &projaddr = std::get<2>(ctx.arguments);
+			// store sum to memory
 			projaddr[i] = ctx.results[i];
 		}
 	}
