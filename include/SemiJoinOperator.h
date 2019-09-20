@@ -15,10 +15,11 @@ private:
 
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		// fetch value from probed column
 		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
-		coat::Struct<typename Fn::F,BitsetTable> bt(fn, "bitsettable");
-		//FIXME: const structures currently not supported
-		bt = const_cast<BitsetTable*>(hashtable); // load address of hash table as immediate/constant in the generated code
+		// embed pointer to hashtable in the generated code
+		auto bt = fn.embedValue(hashtable, "bitsettable");
+		// check for join partner
 		bt.check(val, [&]{
 			next->codegen(fn, ctx);
 		});

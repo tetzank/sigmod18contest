@@ -4,8 +4,6 @@
 #include "Operator.h"
 #include "Relation.h"
 
-#include "coat/ControlFlow.h"
-
 
 // join on column with unique elements, using precalculated ArrayTable
 class JoinUniqueOperator final : public Operator{
@@ -17,10 +15,10 @@ private:
 
 	template<class Fn>
 	void codegen_impl(Fn &fn, CodegenContext<Fn> &ctx){
+		// fetch value from probed column
 		auto val = loadValue(fn, probeColumn, ctx.rowids[probeRelation]);
-		coat::Struct<typename Fn::F,HTu_t> ht(fn, "hashtable_unique");
-		//FIXME: const structures currently not supported
-		ht = const_cast<HTu_t*>(hashtable); // load address of hash table as immediate/constant in the generated code
+		// embed pointer to hashtable in the generated code
+		auto ht = fn.embedValue(hashtable, "hashtable_unique");
 		// lookup join partner, if there is one
 		ht.lookup(val, [&](auto &ele){
 			// set rowid of joined relation
