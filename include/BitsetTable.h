@@ -3,7 +3,7 @@
 
 #include <cstdlib> // calloc, free
 
-#include "coat/Struct.h"
+#include <coat/Struct.h>
 
 
 class BitsetTable final {

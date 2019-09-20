@@ -1,7 +1,7 @@
 #ifndef MULTIARRAYTABLE_H_
 #define MULTIARRAYTABLE_H_
 
-#include "coat/Struct.h"
+#include <coat/Struct.h>
 
 
 template<typename T>

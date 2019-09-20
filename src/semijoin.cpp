@@ -3,8 +3,8 @@
 #include <vector>
 #include <chrono>
 
-#include "coat/Function.h"
-#include "coat/ControlFlow.h"
+#include <coat/Function.h>
+#include <coat/ControlFlow.h>
 
 #include "BitsetTable.h"
 

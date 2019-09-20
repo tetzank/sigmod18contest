@@ -3,7 +3,7 @@
 
 #include <cstring> // memset
 
-#include "coat/Struct.h"
+#include <coat/Struct.h>
 
 
 template<typename T>

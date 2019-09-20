@@ -4,7 +4,7 @@
 #include "Operator.h"
 #include "Relation.h"
 
-#include "coat/ControlFlow.h"
+#include <coat/ControlFlow.h>
 
 
 // relations on both sides of join already bound -> simple filter instead of join

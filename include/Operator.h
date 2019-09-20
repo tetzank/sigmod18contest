@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "coat/Function.h"
+#include <coat/Function.h>
 
 
 /*

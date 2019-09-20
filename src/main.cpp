@@ -5,8 +5,8 @@
 #include <omp.h>
 #endif
 
-#include "coat/Function.h"
-#include "coat/ControlFlow.h"
+#include <coat/Function.h>
+#include <coat/ControlFlow.h>
 
 #include "Relation.h"
 #include "Query.h"

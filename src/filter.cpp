@@ -11,8 +11,8 @@
 #include <unistd.h>
 
 
-#include "coat/Function.h"
-#include "coat/ControlFlow.h"
+#include <coat/Function.h>
+#include <coat/ControlFlow.h>
 
 #include "pod_vector.h"
 

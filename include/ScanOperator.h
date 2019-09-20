@@ -3,7 +3,7 @@
 
 #include "Operator.h"
 
-#include "coat/ControlFlow.h"
+#include <coat/ControlFlow.h>
 
 
 class ScanOperator final : public Operator{
