@@ -46,10 +46,12 @@ include_directories(${LLVM_INCLUDE_DIR})
 
 
 add_executable(sig18 src/main.cpp src/Relation.cpp src/Query.cpp)
-add_executable(filter src/filter.cpp)
-add_executable(equijoin src/equijoin.cpp)
-add_executable(equijoin_unique src/equijoin_unique.cpp)
-add_executable(semijoin src/semijoin.cpp)
+
+# test programs
+add_executable(filter src/tests/filter.cpp)
+add_executable(equijoin src/tests/equijoin.cpp)
+add_executable(equijoin_unique src/tests/equijoin_unique.cpp)
+add_executable(semijoin src/tests/semijoin.cpp)
 
 foreach(prog sig18 filter equijoin equijoin_unique semijoin)
 	target_compile_definitions(${prog} PRIVATE "ENABLE_ASMJIT" PRIVATE "ENABLE_LLVMJIT")
