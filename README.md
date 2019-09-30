@@ -51,3 +51,13 @@ You can pick an optimization level from 0 to 3.
 
 The expected results of each query are in public.res.
 Use `diff` to compare the output for correctness.
+
+Here are some measurements from my workstation.
+
+Back End | Compilation Latency | Execution Time |
+ ------- | -------------------:| --------------:|
+AsmJit   |                5 ms |         550 ms |
+LLVM -O0 |              341 ms |         768 ms |
+LLVM -O1 |              650 ms |         513 ms |
+LLVM -O2 |              663 ms |         521 ms |
+LLVM -O3 |              660 ms |         567 ms |
