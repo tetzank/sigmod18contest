@@ -200,9 +200,23 @@ void parseWork(const char *fname, std::vector<Relation> &relations, executeFunc 
 
 
 void tupleByTuple(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void*, size_t){
+#ifdef MEASURE_TIME
+	auto t_start = std::chrono::high_resolution_clock::now();
+#endif
 	// execute non-codegen
 	Context ctx(q.relationIds.size());
 	scan->execute(&ctx);
+
+#ifdef MEASURE_TIME
+	auto t_end = std::chrono::high_resolution_clock::now();
+#ifndef QUIET
+	printf("query: %11.2f us\n",
+		std::chrono::duration<double, std::micro>( t_end - t_start).count()
+	);
+#endif
+
+	exec_time += std::chrono::duration<double, std::micro>( t_end - t_start).count();
+#endif
 
 	printResult(proj, fd_out);
 }
@@ -253,6 +267,9 @@ uint64_t morsel_execution(codegen_func_type fnptr, uint64_t tuples, uint64_t *re
 #endif
 
 void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
+#ifdef MEASURE_TIME
+	auto t_start = std::chrono::high_resolution_clock::now();
+#endif
 	coat::Function<coat::runtimeasmjit,codegen_func_type> fn((coat::runtimeasmjit*)data);
 	{
 		CodegenContext ctx(fn, q.relationIds.size(), q.selections.size());
@@ -262,6 +279,9 @@ void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj,
 	}
 	// finalize function
 	codegen_func_type fnptr = fn.finalize((coat::runtimeasmjit*)data);
+#ifdef MEASURE_TIME
+	auto t_compile = std::chrono::high_resolution_clock::now();
+#endif
 
 	const size_t rsize = q.selections.size();
 	uint64_t res[rsize];
@@ -273,10 +293,26 @@ void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj,
 	uint64_t amount = fnptr(0, tuples, res);
 #endif
 
+#ifdef MEASURE_TIME
+	auto t_end = std::chrono::high_resolution_clock::now();
+#ifndef QUIET
+	printf("compile: %11.2f us\n  query: %11.2f us\n",
+		std::chrono::duration<double, std::micro>( t_compile - t_start).count(),
+		std::chrono::duration<double, std::micro>( t_end - t_compile).count()
+	);
+#endif
+
+	compilation_time += std::chrono::duration<double, std::micro>( t_compile - t_start).count();
+	exec_time += std::chrono::duration<double, std::micro>( t_end - t_compile).count();
+#endif
+
 	printResult(amount, res, q.selections.size(), fd_out);
 }
 void codegenLLVMjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
 	coat::runtimellvmjit *llvmrt = (coat::runtimellvmjit*) data;
+#ifdef MEASURE_TIME
+	auto t_start = std::chrono::high_resolution_clock::now();
+#endif
 	coat::Function<coat::runtimellvmjit,codegen_func_type> fn(*llvmrt);
 	{
 		CodegenContext ctx(fn, q.relationIds.size(), q.selections.size());
@@ -299,6 +335,9 @@ void codegenLLVMjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj
 	}
 	// finalize function
 	codegen_func_type fnptr = fn.finalize(*llvmrt);
+#ifdef MEASURE_TIME
+	auto t_compile = std::chrono::high_resolution_clock::now();
+#endif
 
 	const size_t rsize = q.selections.size();
 	uint64_t res[rsize];
@@ -308,6 +347,19 @@ void codegenLLVMjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj
 #else
 	// execute generated function
 	uint64_t amount = fnptr(0, tuples, res);
+#endif
+
+#ifdef MEASURE_TIME
+	auto t_end = std::chrono::high_resolution_clock::now();
+#ifndef QUIET
+	printf("compile: %11.2f us\n  query: %11.2f us\n",
+		std::chrono::duration<double, std::micro>( t_compile - t_start).count(),
+		std::chrono::duration<double, std::micro>( t_end - t_compile).count()
+	);
+#endif
+
+	compilation_time += std::chrono::duration<double, std::micro>( t_compile - t_start).count();
+	exec_time += std::chrono::duration<double, std::micro>( t_end - t_compile).count();
 #endif
 
 	printResult(amount, res, q.selections.size(), fd_out);
@@ -371,6 +423,14 @@ int main(int argc, char *argv[]){
 		std::chrono::duration<double, std::micro>( t_end - t_init ).count(),
 		std::chrono::duration<double, std::micro>( t_end - t_start).count()
 	);
+
+#ifdef MEASURE_TIME
+	printf("\nbreakdown of time working on queries from query preparation, compilation latency to execution time\n"
+			"accumulated from all queries in the workload, disable QUIET in cmake to see details for each query\n"
+			"prepare: %12.2f us\ncompile: %12.2f us\nexecute: %12.2f us\n",
+		prepare_time, compilation_time, exec_time
+	);
+#endif
 
 	return 0;
 }

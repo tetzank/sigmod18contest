@@ -48,3 +48,6 @@ For LLVM, run:
 $ ../../build/sig18 -l3 public.{init,work}
 ```
 You can pick an optimization level from 0 to 3.
+
+The expected results of each query are in public.res.
+Use `diff` to compare the output for correctness.
