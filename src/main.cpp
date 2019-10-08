@@ -267,10 +267,11 @@ uint64_t morsel_execution(codegen_func_type fnptr, uint64_t tuples, uint64_t *re
 #endif
 
 void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
+	coat::runtimeasmjit *asmrt = (coat::runtimeasmjit*) data;
 #ifdef MEASURE_TIME
 	auto t_start = std::chrono::high_resolution_clock::now();
 #endif
-	coat::Function<coat::runtimeasmjit,codegen_func_type> fn((coat::runtimeasmjit*)data);
+	coat::Function<coat::runtimeasmjit,codegen_func_type> fn(*asmrt);
 	{
 		CodegenContext ctx(fn, q.relationIds.size(), q.selections.size());
 		scan->codegen(fn, ctx);
@@ -278,7 +279,7 @@ void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj,
 		coat::ret(fn, ctx.amount);
 	}
 	// finalize function
-	codegen_func_type fnptr = fn.finalize((coat::runtimeasmjit*)data);
+	codegen_func_type fnptr = fn.finalize();
 #ifdef MEASURE_TIME
 	auto t_compile = std::chrono::high_resolution_clock::now();
 #endif
@@ -328,13 +329,9 @@ void codegenLLVMjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj
 	if(llvmrt->getOptLevel() > 0){
 		llvmrt->optimize();
 		llvmrt->print("last_opt.ll");
-		if(!llvmrt->verifyFunctions()){
-			puts("verification after optimization failed. aborting.");
-			exit(EXIT_FAILURE); //FIXME: better error handling
-		}
 	}
 	// finalize function
-	codegen_func_type fnptr = fn.finalize(*llvmrt);
+	codegen_func_type fnptr = fn.finalize();
 #ifdef MEASURE_TIME
 	auto t_compile = std::chrono::high_resolution_clock::now();
 #endif

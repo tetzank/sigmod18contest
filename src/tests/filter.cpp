@@ -333,14 +333,14 @@ int main(int argc, char **argv){
 		coat::runtimeasmjit asmrt;
 
 		auto t_start = std::chrono::high_resolution_clock::now();
-		coat::Function<coat::runtimeasmjit,codegen_func_type> fn(&asmrt);
+		coat::Function<coat::runtimeasmjit,codegen_func_type> fn(asmrt);
 		{
 			coat::Value rowid(fn, 0UL, "rowid");
 			scan->codegen(fn, rowid);
 			coat::ret(fn);
 		}
 		// finalize function
-		codegen_func_type fnptr = fn.finalize(&asmrt);
+		codegen_func_type fnptr = fn.finalize();
 
 		auto t_codegen_done = std::chrono::high_resolution_clock::now();
 
@@ -389,13 +389,9 @@ int main(int argc, char **argv){
 		if(optimize){
 			llvmrt.optimize();
 			llvmrt.print("filter_opt.ll");
-			if(!llvmrt.verifyFunctions()){
-				puts("verification after optimization failed. aborting.");
-				exit(EXIT_FAILURE); //FIXME: better error handling
-			}
 		}
 		// finalize function
-		codegen_func_type fnptr = fn.finalize(llvmrt);
+		codegen_func_type fnptr = fn.finalize();
 
 		auto t_codegen_done = std::chrono::high_resolution_clock::now();
 

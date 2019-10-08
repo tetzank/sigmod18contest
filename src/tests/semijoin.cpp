@@ -80,10 +80,10 @@ void assemble(Fn &fn){
 	// init backend
 	coat::runtimeasmjit asmrt;
 	
-	coat::Function<coat::runtimeasmjit,func_type> fn(&asmrt);
+	coat::Function<coat::runtimeasmjit,func_type> fn(asmrt);
 	assemble(fn);
 	// finalize function
-	func_type fnptr = fn.finalize(&asmrt);
+	func_type fnptr = fn.finalize();
 	// execute generated function
 	size_t res = fnptr(col.data.data(), col.data.size(), &bt);
 
@@ -107,7 +107,7 @@ void assemble(Fn &fn){
 	coat::Function<coat::runtimellvmjit,func_type> fn(llvmrt);
 	assemble(fn);
 	// finalize function
-	func_type fnptr = fn.finalize(llvmrt);
+	func_type fnptr = fn.finalize();
 	// execute generated function
 	size_t res = fnptr(col.data.data(), col.data.size(), &bt);
 	//FIXME: free function
