@@ -266,7 +266,16 @@ uint64_t morsel_execution(codegen_func_type fnptr, uint64_t tuples, uint64_t *re
 }
 #endif
 
-void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj, FILE *fd_out, void *data, size_t /*query*/){
+void codegenAsmjit(
+	const Query &q,
+	ScanOperator *scan, ProjectionOperator *proj,
+	FILE *fd_out, void *data,
+#ifdef PROFILING
+	size_t query
+#else
+	size_t /*query*/
+#endif
+){
 	coat::runtimeasmjit *asmrt = (coat::runtimeasmjit*) data;
 #ifdef MEASURE_TIME
 	auto t_start = std::chrono::high_resolution_clock::now();
@@ -279,7 +288,13 @@ void codegenAsmjit(const Query &q, ScanOperator *scan, ProjectionOperator *proj,
 		coat::ret(fn, ctx.amount);
 	}
 	// finalize function
+#ifdef PROFILING
+	char buf[8]={};
+	snprintf(buf, sizeof(buf), "q%lu", query);
+	codegen_func_type fnptr = fn.finalize(buf);
+#else
 	codegen_func_type fnptr = fn.finalize();
+#endif
 #ifdef MEASURE_TIME
 	auto t_compile = std::chrono::high_resolution_clock::now();
 #endif
