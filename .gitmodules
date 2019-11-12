@@ -1,7 +1,7 @@
 [submodule "external/asmjit"]
 	path = external/asmjit
-	url = https://github.com/tetzank/asmjit
-	branch = mywip
+	url = https://github.com/asmjit/asmjit
+	branch = master
 [submodule "external/llvm"]
 	path = external/llvm
 	url = https://github.com/llvm/llvm-project
@@ -9,3 +9,6 @@
 [submodule "external/coat"]
 	path = external/coat
 	url = https://github.com/tetzank/coat.git
+[submodule "external/asmjit-utilities"]
+	path = external/asmjit-utilities
+	url = https://github.com/tetzank/asmjit-utilities

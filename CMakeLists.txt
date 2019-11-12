@@ -31,6 +31,18 @@ find_library(ASMJIT_LIBRARIES
 )
 include_directories(${ASMJIT_INCLUDE_DIR})
 
+# find asmjit_perf
+find_path(ASMJIT_PERF_INCLUDE_DIR
+	asmjit-utilities/perf/jitdump.h
+	HINTS external/
+)
+find_library(ASMJIT_PERF_LIBRARIES
+	asmjit_perf
+	HINTS external/asmjit-utilities
+	PATH_SUFFIXES perf/build
+)
+include_directories(${ASMJIT_PERF_INCLUDE_DIR})
+
 # find llvm, quick&dirty
 find_path(LLVM_INCLUDE_DIR
 	llvm/IR/IRBuilder.h
@@ -93,7 +105,8 @@ if(MEASURE_TIME)
 endif()
 option(PROFILING "enable perf profiling support" OFF)
 if(PROFILING)
-	target_compile_definitions(sig18 PRIVATE "PROFILING")
+	target_compile_definitions(sig18 PRIVATE "PROFILING" PRIVATE "PROFILING_SOURCE")
+	target_link_libraries(sig18 ${ASMJIT_PERF_LIBRARIES})
 endif()
 
 # debugging options

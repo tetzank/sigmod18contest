@@ -280,7 +280,13 @@ void codegenAsmjit(
 #ifdef MEASURE_TIME
 	auto t_start = std::chrono::high_resolution_clock::now();
 #endif
+#ifdef PROFILING
+	char buf[8]={};
+	snprintf(buf, sizeof(buf), "q%lu", query);
+	coat::Function<coat::runtimeasmjit,codegen_func_type> fn(*asmrt, buf);
+#else
 	coat::Function<coat::runtimeasmjit,codegen_func_type> fn(*asmrt);
+#endif
 	{
 		CodegenContext ctx(fn, q.relationIds.size(), q.selections.size());
 		scan->codegen(fn, ctx);
@@ -288,13 +294,7 @@ void codegenAsmjit(
 		coat::ret(fn, ctx.amount);
 	}
 	// finalize function
-#ifdef PROFILING
-	char buf[8]={};
-	snprintf(buf, sizeof(buf), "q%lu", query);
-	codegen_func_type fnptr = fn.finalize(buf);
-#else
 	codegen_func_type fnptr = fn.finalize();
-#endif
 #ifdef MEASURE_TIME
 	auto t_compile = std::chrono::high_resolution_clock::now();
 #endif

@@ -61,10 +61,18 @@ struct CodegenContext {
 
 	CodegenContext(Fn &fn, size_t numberOfRelations, size_t numberOfProjections)
 		: arguments(fn.getArguments("lower", "upper", "proj_addr"))
-		, rowids(numberOfRelations, coat::Value<CC,uint64_t>(fn))
-		, results(numberOfProjections, coat::Value<CC,uint64_t>(fn, 0UL))
 		, amount(fn, 0UL, "amount")
-	{}
+	{
+		// emplace_back() in a loop to avoid copies
+		rowids.reserve(numberOfRelations);
+		for(size_t i=0; i<numberOfRelations; ++i){
+			rowids.emplace_back(fn);
+		}
+		results.reserve(numberOfProjections);
+		for(size_t i=0; i<numberOfProjections; ++i){
+			results.emplace_back(fn);
+		}
+	}
 };
 
 
