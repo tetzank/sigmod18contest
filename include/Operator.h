@@ -70,7 +70,7 @@ struct CodegenContext {
 		}
 		results.reserve(numberOfProjections);
 		for(size_t i=0; i<numberOfProjections; ++i){
-			results.emplace_back(fn);
+			results.emplace_back(fn, 0UL);
 		}
 	}
 };
